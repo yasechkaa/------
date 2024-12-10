@@ -7,7 +7,6 @@ import pygetwindow as gw
 from pynput import mouse
 import logging
 
-# Настройка логирования
 logging.basicConfig(level=logging.INFO, format='%(asctime)s - %(levelname)s - %(message)s')
 
 class FocusedWorkTracker:
@@ -17,14 +16,14 @@ class FocusedWorkTracker:
         self.total_time = 0
         self.is_tracking = False
         self.cursor_positions = []
-        self.window_changes = []  # Список для хранения изменений окон
+        self.window_changes = [] 
 
     def start_tracking(self):
         self.is_tracking = True
         self.start_time = datetime.now()
         self.cursor_positions.clear()
         self.window_changes.clear()
-        self.register_window_change()  # Сразу регистрируем текущее активное окно
+        self.register_window_change()
         logging.info("Started tracking work time.")
 
     def stop_tracking(self):
@@ -140,10 +139,10 @@ class TrackerApp:
         messagebox.showinfo("Statistics", message)
 
     def update_active_window(self):
-        self.tracker.register_window_change()  # Регистрируем изменения активного окна
+        self.tracker.register_window_change()
         active_window = self.tracker.get_active_window()
         self.active_window_label.config(text=f"Active Window: {active_window}")
-        self.root.after(1000, self.update_active_window)  # Обновляем каждые 1000 мс (1 секунда)
+        self.root.after(1000, self.update_active_window) 
 
     def update_timer(self):
         if self.tracker.is_tracking:
