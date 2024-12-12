@@ -3,11 +3,17 @@ from tkinter import messagebox
 from datetime import datetime
 import time
 import threading
+import os
 import pygetwindow as gw
 from pynput import mouse
 import logging
 
-logging.basicConfig(level=logging.INFO, format='%(asctime)s - %(levelname)s - %(message)s')
+# Set up logging
+log_folder = "logs"
+os.makedirs(log_folder, exist_ok=True)
+logging.basicConfig(filename=os.path.join(log_folder, 'work_tracker.log'),
+                    level=logging.INFO,
+                    format='%(asctime)s - %(levelname)s - %(message)s')
 
 class FocusedWorkTracker:
     def __init__(self):
@@ -15,8 +21,9 @@ class FocusedWorkTracker:
         self.start_time = None
         self.total_time = 0
         self.is_tracking = False
+        self.is_paused = False
         self.cursor_positions = []
-        self.window_changes = [] 
+        self.window_changes = []
 
     def start_tracking(self):
         self.is_tracking = True
@@ -26,9 +33,20 @@ class FocusedWorkTracker:
         self.register_window_change()
         logging.info("Started tracking work time.")
 
+    def pause_tracking(self):
+        if self.is_tracking and not self.is_paused:
+            self.is_paused = True
+            logging.info("Paused work tracking.")
+
+    def resume_tracking(self):
+        if self.is_tracking and self.is_paused:
+            self.is_paused = False
+            self.start_time = datetime.now()  # Reset start time for the resume
+            logging.info("Resumed work tracking.")
+
     def stop_tracking(self):
         if self.is_tracking:
-            elapsed_time = (datetime.now() - self.start_time).total_seconds()
+            elapsed_time = (datetime.now() - self.start_time).total_seconds() if not self.is_paused else 0
             self.total_time += elapsed_time
             self.is_tracking = False
             self.start_time = None
@@ -68,8 +86,9 @@ class CursorTracker(threading.Thread):
 
     def run(self):
         while self.running:
-            x, y = mouse.Controller().position
-            self.tracker.record_cursor_position((x, y))
+            if self.tracker.is_tracking and not self.tracker.is_paused:
+                x, y = mouse.Controller().position
+                self.tracker.record_cursor_position((x, y))
             time.sleep(1)
 
     def stop(self):
@@ -90,7 +109,13 @@ class TrackerApp:
         self.start_button = tk.Button(root, text="Start Tracking", command=self.start_tracking)
         self.start_button.pack(pady=5)
 
-        self.stop_button = tk.Button(root, text="Stop Tracking", command=self.stop_tracking)
+        self.pause_button = tk.Button(root, text="Pause Tracking", command=self.pause_tracking, state=tk.DISABLED)
+        self.pause_button.pack(pady=5)
+
+        self.resume_button = tk.Button(root, text="Resume Tracking", command=self.resume_tracking, state=tk.DISABLED)
+        self.resume_button.pack(pady=5)
+
+        self.stop_button = tk.Button(root, text="Stop Tracking", command=self.stop_tracking, state=tk.DISABLED)
         self.stop_button.pack(pady=5)
 
         self.stats_button = tk.Button(root, text="Show Statistics", command=self.show_statistics)
@@ -104,11 +129,23 @@ class TrackerApp:
     def start_tracking(self):
         self.tracker.start_tracking()
         self.start_button.config(state=tk.DISABLED)
+        self.pause_button.config(state=tk.NORMAL)
+        self.resume_button.config(state=tk.DISABLED)
         self.stop_button.config(state=tk.NORMAL)
-        
+
         self.cursor_tracker = CursorTracker(self.tracker)
         self.cursor_tracker.start()
         self.update_timer()
+
+    def pause_tracking(self):
+        self.tracker.pause_tracking()
+        self.pause_button.config(state=tk.DISABLED)
+        self.resume_button.config(state=tk.NORMAL)
+
+    def resume_tracking(self):
+        self.tracker.resume_tracking()
+        self.pause_button.config(state=tk.NORMAL)
+        self.resume_button.config(state=tk.DISABLED)
 
     def stop_tracking(self):
         self.tracker.stop_tracking()
@@ -116,6 +153,8 @@ class TrackerApp:
             self.cursor_tracker.stop()
             self.cursor_tracker = None
         self.start_button.config(state=tk.NORMAL)
+        self.pause_button.config(state=tk.DISABLED)
+        self.resume_button.config(state=tk.DISABLED)
         self.stop_button.config(state=tk.DISABLED)
 
     def on_closing(self):
@@ -128,9 +167,9 @@ class TrackerApp:
         active_window = self.tracker.get_active_window()
         cursor_positions = self.tracker.cursor_positions
 
-        message = f"Total Focused Work Time: {total_time:.2f} seconds\n"
+        message = f"Total Focused Work Time: {total_time:.2f} seconds"
         message += f"Active Window: {active_window}\n"
-        message += f"Cursor Positions Recorded: {len(cursor_positions)}\n\n"
+        message += f"Cursor Positions Recorded: {len(cursor_positions)}\n"
 
         message += "Window Changes:\n"
         for change_time, window_title in self.tracker.window_changes:
@@ -142,7 +181,7 @@ class TrackerApp:
         self.tracker.register_window_change()
         active_window = self.tracker.get_active_window()
         self.active_window_label.config(text=f"Active Window: {active_window}")
-        self.root.after(1000, self.update_active_window) 
+        self.root.after(1000, self.update_active_window)
 
     def update_timer(self):
         if self.tracker.is_tracking:
@@ -152,6 +191,7 @@ class TrackerApp:
 def main():
     root = tk.Tk()
     app = TrackerApp(root)
+    root.protocol("WM_DELETE_WINDOW", app.on_closing)
     root.mainloop()
 
 
